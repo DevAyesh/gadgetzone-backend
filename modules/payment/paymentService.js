@@ -4,10 +4,12 @@ const Order = require('../../models/Order');
 
 class PaymentService {
   /**
-   * Helper to format amount to 2 decimal places (e.g., "1000.00")
+   * Helper to format amount to 2 decimal places (e.g., "25000.00")
    */
   formatAmount(amount) {
-    return Number(amount).toFixed(2);
+    const num = Number(amount);
+    if (isNaN(num)) return "0.00";
+    return num.toFixed(2);
   }
 
   /**
@@ -53,13 +55,15 @@ class PaymentService {
       custom_2,
     } = notifyData;
 
+    const formattedPayhereAmount = this.formatAmount(payhere_amount);
     const hashedSecret = this.getHashedSecret();
 
-    // Re-generate MD5 signature for verification according to PayHere documentation
+    // Re-generate MD5 signature for verification according to PayHere documentation:
+    // MD5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + MD5(merchant_secret))
     const rawString =
       merchant_id +
       order_id +
-      payhere_amount +
+      formattedPayhereAmount +
       payhere_currency +
       status_code +
       hashedSecret;
@@ -67,7 +71,8 @@ class PaymentService {
     const localMd5sig = crypto.createHash('md5').update(rawString).digest('hex').toUpperCase();
 
     // Verify hash integrity
-    if (localMd5sig !== md5sig.toUpperCase()) {
+    if (localMd5sig !== String(md5sig).toUpperCase()) {
+      console.warn(`[PAYMENT WARN] MD5 SIGNATURE MISMATCH - EXPECTED: ${localMd5sig}, RECEIVED: ${String(md5sig).toUpperCase()}`);
       const error = new Error('PayHere Webhook MD5 Signature Verification Failed');
       error.statusCode = 400;
       throw error;
