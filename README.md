@@ -388,13 +388,7 @@ PAYHERE_MODE=sandbox
 GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 ```
 
-### 2. Seed Initial Admin Account
-```powershell
-npm run seed:admin
-```
-*(Creates initial Super Admin: `admin@gadgetzone.com` / `Admin123!`)*
-
-### 3. Run Development Server
+### 2. Run Development Server
 ```powershell
 npm run dev
 ```
