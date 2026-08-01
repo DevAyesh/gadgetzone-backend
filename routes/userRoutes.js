@@ -1,13 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser, getUserProfile } = require('../controllers/userController');
-const { protect } = require('../middleware/authMiddleware');
+const userModuleRoutes = require('../modules/user/userRoutes');
+const authModuleRoutes = require('../modules/auth/authRoutes');
 
-// Public routes
-router.post('/register', registerUser);
-router.post('/login', loginUser);
-
-// Private routes (requires login token)
-router.get('/profile', protect, getUserProfile);
+// Mount Auth routes on legacy userRoutes for backwards compatibility (/api/users/register, /api/users/login)
+router.use('/', authModuleRoutes);
+router.use('/', userModuleRoutes);
 
 module.exports = router;

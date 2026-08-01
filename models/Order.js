@@ -29,6 +29,13 @@ const orderSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       required: true,
+      default: 'PayHere',
+    },
+    paymentResult: {
+      id: { type: String },
+      status: { type: String },
+      update_time: { type: String },
+      payhere_payment_id: { type: String },
     },
     totalPrice: {
       type: Number,
