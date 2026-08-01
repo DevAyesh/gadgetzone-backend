@@ -2,8 +2,14 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const connectDB = require('./config/db');
+
+// Import Modular Routes
+const authRoutes = require('./modules/auth/authRoutes');
+const userRoutes = require('./modules/user/userRoutes');
+const paymentRoutes = require('./modules/payment/paymentRoutes');
 const productRoutes = require('./routes/productRoutes');
-const userRoutes = require('./routes/userRoutes');
+
+// Import Global Middleware
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Connect to database
@@ -11,17 +17,25 @@ connectDB();
 
 const app = express();
 
-// Middleware
-app.use(cors()); // Crucial so your Vercel frontend can talk to your Render backend
+// Global Middleware
+app.use(cors());
 app.use(express.json());
+// PayHere sends webhook notifications in application/x-www-form-urlencoded format
+app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/products', productRoutes);
+// Mount Domain Microservices Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/products', productRoutes);
 
 // Health check
 app.get('/', (req, res) => {
-  res.send('GadgetZone Backend API is running!');
+  res.json({
+    status: 'online',
+    message: 'GadgetZone Gatekeeper (Auth, User & Payment) API Microservice is running',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Error Handling Middleware (must be LAST)
@@ -30,5 +44,5 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  console.log(`[SERVER RUNNING] GADGETZONE BACKEND RUNNING IN ${(process.env.NODE_ENV || 'DEVELOPMENT').toUpperCase()} MODE ON PORT ${PORT}`);
 });
