@@ -7,7 +7,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./modules/auth/authRoutes');
 const userRoutes = require('./modules/user/userRoutes');
 const paymentRoutes = require('./modules/payment/paymentRoutes');
-const productRoutes = require('./routes/productRoutes');
+const productRoutes = require('./modules/product/productRoutes');
 
 // Import Global Middleware
 const { notFound, errorHandler } = require('./middleware/errorHandler');
