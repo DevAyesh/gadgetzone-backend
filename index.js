@@ -7,7 +7,8 @@ const connectDB = require('./config/db');
 const authRoutes = require('./modules/auth/authRoutes');
 const userRoutes = require('./modules/user/userRoutes');
 const paymentRoutes = require('./modules/payment/paymentRoutes');
-const productRoutes = require('./routes/productRoutes');
+const productRoutes = require('./modules/product/productRoutes');
+const orderRoutes = require('./modules/order/orderRoutes');
 
 // Import Global Middleware
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -28,6 +29,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Health check
 app.get('/', (req, res) => {
