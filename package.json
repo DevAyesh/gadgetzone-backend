@@ -7,7 +7,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed:admin": "node scripts/seedAdmin.js",
-    "test": "node scripts/check-syntax.js"
+    "test": "node scripts/check-syntax.js && npm run lint && npm run type-check",
+    "lint": "eslint .",
+    "type-check": "tsc"
   },
   "keywords": [],
   "author": "",
@@ -24,5 +26,10 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.8.0",
     "multer": "^2.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "eslint": "^9.9.0",
+    "typescript": "^5.5.4"
   }
 }
