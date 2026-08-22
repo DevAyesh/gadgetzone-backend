@@ -1,5 +1,6 @@
 const Order = require('../../models/Order');
 const Product = require('../../models/Product');
+const User = require('../../models/User');
 
 class OrderService {
   /**
@@ -210,6 +211,136 @@ class OrderService {
     const updatedOrder = await order.save();
     return updatedOrder;
   }
+  
+  async getDailySales(days = 30) {
+    const daysNum = Math.max(1, Number(days) || 30);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysNum);
+    startDate.setHours(0, 0, 0, 0);
+
+    const results = await Order.aggregate([
+      {
+        $match: {
+          isPaid: true,
+          paidAt: { $gte: startDate },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$paidAt' } },
+          totalRevenue: { $sum: '$totalPrice' },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          date: '$_id',
+          totalRevenue: { $round: ['$totalRevenue', 2] },
+          orderCount: 1,
+        },
+      },
+    ]);
+
+    return results;
+  }
+
+  /**
+   * [ADMIN] Monthly revenue aggregation for paid orders only, over the last N months
+   */
+  async getMonthlySales(months = 12) {
+    const monthsNum = Math.max(1, Number(months) || 12);
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - monthsNum);
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+
+    const results = await Order.aggregate([
+      {
+        $match: {
+          isPaid: true,
+          paidAt: { $gte: startDate },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m', date: '$paidAt' } },
+          totalRevenue: { $sum: '$totalPrice' },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          month: '$_id',
+          totalRevenue: { $round: ['$totalRevenue', 2] },
+          orderCount: 1,
+        },
+      },
+    ]);
+
+    return results;
+  }
+
+  /**
+   * [ADMIN] Top-selling products by quantity sold, from paid orders only
+   */
+  async getTopSellingProducts(limit = 10) {
+    const limitNum = Math.max(1, Number(limit) || 10);
+
+    const results = await Order.aggregate([
+      { $match: { isPaid: true } },
+      { $unwind: '$orderItems' },
+      {
+        $group: {
+          _id: '$orderItems.product',
+          name: { $first: '$orderItems.name' },
+          totalQtySold: { $sum: '$orderItems.qty' },
+          totalRevenue: { $sum: { $multiply: ['$orderItems.qty', '$orderItems.price'] } },
+        },
+      },
+      { $sort: { totalQtySold: -1 } },
+      { $limit: limitNum },
+      {
+        $project: {
+          _id: 0,
+          productId: '$_id',
+          name: 1,
+          totalQtySold: 1,
+          totalRevenue: { $round: ['$totalRevenue', 2] },
+        },
+      },
+    ]);
+
+    return results;
+  }
+
+  /**
+   * [ADMIN] Dashboard summary metrics: total users, pending orders, total revenue
+   */
+  async getDashboardMetrics() {
+    const [totalUsers, pendingOrdersCount, totalPaidOrders, revenueResult] = await Promise.all([
+      User.countDocuments({ isRemoved: false }),
+      Order.countDocuments({ isPaid: false }),
+      Order.countDocuments({ isPaid: true }),
+      Order.aggregate([
+        { $match: { isPaid: true } },
+        { $group: { _id: null, total: { $sum: '$totalPrice' } } },
+      ]),
+    ]);
+
+    const totalRevenue = revenueResult.length > 0 ? Number(revenueResult[0].total.toFixed(2)) : 0;
+
+    return {
+      totalUsers,
+      pendingOrdersCount,
+      totalPaidOrders,
+      totalRevenue,
+    };
+  }
+
 }
 
 module.exports = new OrderService();

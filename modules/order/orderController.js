@@ -131,6 +131,76 @@ class OrderController {
       next(error);
     }
   }
+  /**
+    * @route   GET /api/orders/admin/sales/daily
+    * @desc    Daily revenue aggregation (paid orders only)
+    * @access  Private/Admin
+    */
+  async getDailySales(req, res, next) {
+    try {
+      const days = req.query.days || 30;
+      const data = await orderService.getDailySales(days);
+      return successResponse(res, 200, 'Daily sales data fetched successfully', data);
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * @route   GET /api/orders/admin/sales/monthly
+   * @desc    Monthly revenue aggregation (paid orders only)
+   * @access  Private/Admin
+   */
+  async getMonthlySales(req, res, next) {
+    try {
+      const months = req.query.months || 12;
+      const data = await orderService.getMonthlySales(months);
+      return successResponse(res, 200, 'Monthly sales data fetched successfully', data);
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * @route   GET /api/orders/admin/sales/top-products
+   * @desc    Top-selling products by quantity (paid orders only)
+   * @access  Private/Admin
+   */
+  async getTopSellingProducts(req, res, next) {
+    try {
+      const limit = req.query.limit || 10;
+      const data = await orderService.getTopSellingProducts(limit);
+      return successResponse(res, 200, 'Top selling products fetched successfully', data);
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * @route   GET /api/orders/admin/metrics
+   * @desc    Dashboard summary metrics (total users, pending orders, revenue)
+   * @access  Private/Admin
+   */
+  async getDashboardMetrics(req, res, next) {
+    try {
+      const data = await orderService.getDashboardMetrics();
+      return successResponse(res, 200, 'Dashboard metrics fetched successfully', data);
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
 }
 
 module.exports = new OrderController();
