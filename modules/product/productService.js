@@ -62,7 +62,7 @@ class ProductService {
    * [PUBLIC] Fetch & search products with category filter, keyword search, pagination
    */
   async getAllProducts(queryParams = {}) {
-    const { search, category, minPrice, maxPrice, page = 1, limit = 20 } = queryParams;
+    const { search, category, minPrice, maxPrice, page = 1, limit } = queryParams;
 
     const filter = { isRemoved: false };
 
@@ -77,7 +77,19 @@ class ProductService {
     }
 
     if (search && String(search).trim()) {
-      filter.name = new RegExp(String(search).trim(), 'i');
+      const cleanSearch = String(search).trim();
+      const searchRegex = new RegExp(cleanSearch, 'i');
+      const searchConditions = [
+        { name: searchRegex },
+        { description: searchRegex },
+        { category: searchRegex },
+      ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchConditions }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchConditions;
+      }
     }
 
     if (minPrice !== undefined || maxPrice !== undefined) {
@@ -87,7 +99,8 @@ class ProductService {
     }
 
     const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.max(1, Number(limit));
+    const isStorefrontAll = !limit && queryParams.paginated !== 'true';
+    const limitNum = isStorefrontAll ? 1000 : Math.max(1, Number(limit || 20));
     const skip = (pageNum - 1) * limitNum;
 
     const total = await Product.countDocuments(filter);
