@@ -16,10 +16,17 @@ class ProductController {
     try {
       const { products, pagination } = await productService.getAllProducts(req.query);
       const productsDtoList = products.map(toProductDTO);
-      return successResponse(res, 200, 'Products fetched successfully', {
-        products: productsDtoList,
-        pagination,
-      });
+
+      // If explicitly requested paginated format (e.g. from admin panel)
+      if (req.query.paginated === 'true' || req.query.format === 'object') {
+        return successResponse(res, 200, 'Products fetched successfully', {
+          products: productsDtoList,
+          pagination,
+        });
+      }
+
+      // Default storefront contract expects direct array of products
+      return res.status(200).json(productsDtoList);
     } catch (error) {
       if (error.statusCode) {
         return errorResponse(res, error.statusCode, error.message);
@@ -30,13 +37,32 @@ class ProductController {
 
   /**
    * @route   GET /api/products/:id
-   * @desc    Fetch a single product
+   * @desc    Fetch a single product by ID
    * @access  Public
    */
   async getProductById(req, res, next) {
     try {
       const product = await productService.getProductById(req.params.id);
-      return successResponse(res, 200, 'Product fetched successfully', toProductDTO(product));
+      const dto = toProductDTO(product);
+      return res.status(200).json(dto);
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * @route   GET /api/products/slug/:slug
+   * @desc    Fetch a single product by slug
+   * @access  Public
+   */
+  async getProductBySlug(req, res, next) {
+    try {
+      const product = await productService.getProductBySlug(req.params.slug);
+      const dto = toProductDTO(product);
+      return res.status(200).json(dto);
     } catch (error) {
       if (error.statusCode) {
         return errorResponse(res, error.statusCode, error.message);

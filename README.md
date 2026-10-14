@@ -386,6 +386,11 @@ PAYHERE_MODE=sandbox
 
 # Google OAuth Credentials
 GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+
+# SendGrid Notification Service Credentials
+SENDGRID_API_KEY=SG.your_sendgrid_api_key
+SENDGRID_FROM_EMAIL=noreply@gadgetzone.lk
+SENDGRID_FROM_NAME=GadgetZone
 ```
 
 ### 2. Run Development Server
@@ -414,3 +419,18 @@ npm run dev
 | **Admin** | `PUT` | `/api/users/:id/restore` | `verifyToken` + `isAdmin` | Restore/undelete soft-deleted user/admin account |
 | **Payment** | `POST` | `/api/payments/hash` | `verifyToken` | Generate MD5 cryptographic signature for PayHere checkout |
 | **Payment** | `POST` | `/api/payments/notify` | Public Webhook | PayHere payment confirmation callback webhook |
+| **Notification** | `POST` | `/api/auth/verify-register-otp` | Public | Verify registration OTP to activate user email verification |
+| **Notification** | `POST` | `/api/auth/send-login-otp` | Public | Initiate 2FA/login OTP code delivery to email |
+| **Notification** | `POST` | `/api/auth/verify-login-otp` | Public | Verify login OTP code and obtain JWT session |
+| **Notification** | `POST` | `/api/auth/forgot-password` | Public | Request password reset OTP email |
+| **Notification** | `POST` | `/api/auth/verify-reset-otp` | Public | Validate password reset OTP without consuming |
+| **Notification** | `POST` | `/api/auth/reset-password` | Public | Reset password with OTP code |
+| **Notification** | `POST` | `/api/auth/resend-otp` | Public | Resend OTP code for REGISTER, LOGIN, or PASSWORD_RESET |
+| **Notification** | `POST` | `/api/notifications/verify-otp` | Public | General OTP verification utility endpoint |
+| **Notification** | `POST` | `/api/notifications/resend-otp` | Public | General OTP resend utility endpoint |
+| **Notification** | `POST` | `/api/notifications/test` | `verifyToken` + `isAdmin` | Send test notification email via SendGrid |
+| **Notification** | `POST` | `/api/notifications/send-custom` | `verifyToken` + `isAdmin` | Dispatch custom message notification to user |
+| **Notification** | `GET` | `/api/notifications/history` | `verifyToken` + `isAdmin` | View notification delivery audit trail |
+| **Order** | `PUT` | `/api/orders/:id/ship` | `verifyToken` + `isAdmin` | Mark order as shipped and dispatch carrier tracking email |
+| **Order** | `PUT` | `/api/orders/:id/cancel` | `verifyToken` | Cancel order, restock inventory, dispatch cancellation email |
+

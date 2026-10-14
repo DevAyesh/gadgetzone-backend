@@ -2,9 +2,12 @@ const paymentService = require('./paymentService');
 const {
   validatePayHereHashRequest,
   validatePayHereNotifyInput,
+  validateConfirmPaymentInput,
   toPayHereHashResponseDTO,
 } = require('./dtos/paymentDtos');
+const { toOrderDTO } = require('../order/dtos/orderDtos');
 const { successResponse, errorResponse } = require('../../common/dtos/responseDto');
+
 
 class PaymentController {
   /**
@@ -62,6 +65,34 @@ class PaymentController {
       next(error);
     }
   }
+
+  /**
+   * @route   POST /api/payments/confirm
+   * @desc    Confirm successful payment from client-side PayHere onCompleted callback
+   * @access  Private (or Guest checkout)
+   */
+  async confirmPayment(req, res, next) {
+    try {
+      const body = req.body || {};
+      const validation = validateConfirmPaymentInput(body);
+      if (!validation.isValid) {
+        return errorResponse(res, 400, 'Validation Failed', validation.errors);
+      }
+
+      const result = await paymentService.confirmPaymentCompletion(body, req.user);
+      const dto = toOrderDTO(result.order);
+      console.log(`[PAYMENT CONFIRMED] ORDER ${result.order._id} MARKED AS PAID VIA CLIENT CONFIRMATION (STATUS: ${result.status})`);
+
+      return successResponse(res, 200, result.message, dto);
+    } catch (error) {
+      if (error.statusCode) {
+        console.error(`[PAYMENT ERROR] FAILED TO CONFIRM PAYMENT: ${error.message.toUpperCase()}`);
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
 }
 
 module.exports = new PaymentController();
+

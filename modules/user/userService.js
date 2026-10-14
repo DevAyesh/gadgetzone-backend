@@ -21,7 +21,7 @@ class UserService {
 
     try {
       return await User.findOne(query);
-    } catch (err) {
+    } catch (_err) {
       return await User.findOne({ userId: identifier, ...(includeRemoved ? {} : { isRemoved: false }) });
     }
   }
@@ -163,7 +163,10 @@ class UserService {
   /**
    * [ADMIN] Update User or Admin Account Active/Inactive status
    */
-  async updateUserStatus(adminUserId, targetUserId, isActive) {
+  async updateUserStatus(adminUser, targetUserId, isActive) {
+    const adminUserId = adminUser && adminUser._id ? adminUser._id.toString() : String(adminUser);
+    const isRequesterSuperAdmin = Boolean(adminUser && adminUser.isSuperAdmin);
+
     const user = await this.findUserByIdentifier(targetUserId);
     if (!user || user.isRemoved) {
       const error = new Error('Target account not found or deleted');
@@ -171,9 +174,15 @@ class UserService {
       throw error;
     }
 
-    if (user._id.toString() === adminUserId.toString() && isActive === false) {
+    if (user._id.toString() === adminUserId && isActive === false) {
       const error = new Error('Admins cannot deactivate their own account.');
       error.statusCode = 400;
+      throw error;
+    }
+
+    if (user.isSuperAdmin && !isRequesterSuperAdmin) {
+      const error = new Error('Only Super Admins can change status of a Super Admin account');
+      error.statusCode = 403;
       throw error;
     }
 
@@ -185,8 +194,10 @@ class UserService {
   /**
    * [ADMIN] Onboard a new Admin user
    */
-  async createAdminUser({ name, email, password }) {
-    let user = await User.findOne({ email: email.toLowerCase() });
+  async createAdminUser({ name, email, password, isSuperAdmin = false }) {
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanName = name ? name.trim() : '';
+    let user = await User.findOne({ email: cleanEmail });
 
     if (user) {
       if (!user.isRemoved && user.role === 'admin') {
@@ -194,22 +205,28 @@ class UserService {
         error.statusCode = 400;
         throw error;
       }
-      user.name = name;
+      user.name = cleanName;
       user.password = password;
       user.role = 'admin';
       user.isAdmin = true;
+      if (isSuperAdmin !== undefined) {
+        user.isSuperAdmin = Boolean(isSuperAdmin);
+      }
       user.isRemoved = false;
       user.isActive = true;
+      user.isEmailVerified = true;
       await user.save();
     } else {
       user = await User.create({
-        name,
-        email: email.toLowerCase(),
+        name: cleanName,
+        email: cleanEmail,
         password,
         role: 'admin',
         isAdmin: true,
+        isSuperAdmin: Boolean(isSuperAdmin),
         isRemoved: false,
         isActive: true,
+        isEmailVerified: true,
       });
     }
 
@@ -219,7 +236,7 @@ class UserService {
   /**
    * [ADMIN] Update User Role (Promote to Admin / Demote to Customer)
    */
-  async updateUserRole(targetUserId, role) {
+  async updateUserRole(targetUserId, role, isSuperAdmin = undefined, requestingUser = null) {
     if (!['customer', 'admin'].includes(role)) {
       const error = new Error('Invalid role specified. Must be customer or admin.');
       error.statusCode = 400;
@@ -233,8 +250,43 @@ class UserService {
       throw error;
     }
 
+    const requesterIsSuper = Boolean(requestingUser && requestingUser.isSuperAdmin);
+
+    // If target is super admin and requester is not super admin, block
+    if (user.isSuperAdmin && requestingUser && !requesterIsSuper) {
+      const error = new Error('Only Super Admins can modify the role of another Super Admin');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Prevent demoting oneself or revoking one's own Super Admin privileges
+    if (requestingUser && user._id.toString() === requestingUser._id.toString()) {
+      if (role === 'customer') {
+        const error = new Error('Admins cannot demote their own account');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (user.isSuperAdmin && isSuperAdmin === false) {
+        const error = new Error('Super Admins cannot revoke their own Super Admin privileges');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    // Only super admins can grant super admin role
+    if (isSuperAdmin && requestingUser && !requesterIsSuper) {
+      const error = new Error('Only Super Admins can grant Super Admin privileges');
+      error.statusCode = 403;
+      throw error;
+    }
+
     user.role = role;
     user.isAdmin = role === 'admin';
+    if (role === 'customer') {
+      user.isSuperAdmin = false;
+    } else if (isSuperAdmin !== undefined) {
+      user.isSuperAdmin = Boolean(isSuperAdmin);
+    }
     const updatedUser = await user.save();
     return updatedUser;
   }
@@ -242,7 +294,10 @@ class UserService {
   /**
    * [ADMIN] Soft delete a specific user/admin by numeric userId or _id
    */
-  async softDeleteUserByAdmin(adminUserId, targetUserId) {
+  async softDeleteUserByAdmin(adminUser, targetUserId) {
+    const adminUserId = adminUser && adminUser._id ? adminUser._id.toString() : String(adminUser);
+    const isRequesterSuperAdmin = Boolean(adminUser && adminUser.isSuperAdmin);
+
     const user = await this.findUserByIdentifier(targetUserId);
     if (!user || user.isRemoved) {
       const error = new Error('Target user account not found or already deleted');
@@ -250,9 +305,15 @@ class UserService {
       throw error;
     }
 
-    if (user._id.toString() === adminUserId.toString()) {
+    if (user._id.toString() === adminUserId) {
       const error = new Error('Admins cannot soft-delete their own account via admin management. Use profile deletion instead.');
       error.statusCode = 400;
+      throw error;
+    }
+
+    if (user.isSuperAdmin && !isRequesterSuperAdmin) {
+      const error = new Error('Only Super Admins can delete a Super Admin account');
+      error.statusCode = 403;
       throw error;
     }
 
@@ -264,7 +325,8 @@ class UserService {
   /**
    * [ADMIN] Restore / Undelete a soft-deleted user/admin account
    */
-  async restoreUserByAdmin(targetUserId) {
+  async restoreUserByAdmin(adminUser, targetUserId) {
+    const isRequesterSuperAdmin = Boolean(adminUser && adminUser.isSuperAdmin);
     const user = await this.findUserByIdentifier(targetUserId, true);
     if (!user) {
       const error = new Error('Target user account not found');
@@ -275,6 +337,12 @@ class UserService {
     if (!user.isRemoved) {
       const error = new Error('User account is not deleted');
       error.statusCode = 400;
+      throw error;
+    }
+
+    if (user.isSuperAdmin && !isRequesterSuperAdmin) {
+      const error = new Error('Only Super Admins can restore a Super Admin account');
+      error.statusCode = 403;
       throw error;
     }
 

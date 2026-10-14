@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const payhereConfig = require('../../config/payhere');
 const Order = require('../../models/Order');
+const notificationService = require('../notification/notificationService');
 
 class PaymentService {
   /**
@@ -22,9 +23,18 @@ class PaymentService {
   /**
    * Generate PayHere Checkout MD5 Hash Signature
    */
-  generatePayHereHash({ order_id, amount, currency = payhereConfig.currency }) {
+  generatePayHereHash({ order_id, amount, isMinorUnits = false, currency = payhereConfig.currency }) {
     const merchantId = payhereConfig.merchantId;
-    const formattedAmount = this.formatAmount(amount);
+    let numericAmount = Number(amount);
+    if (isNaN(numericAmount) || numericAmount < 0) {
+      numericAmount = 0;
+    }
+
+    if (isMinorUnits) {
+      numericAmount = numericAmount / 100;
+    }
+
+    const formattedAmount = this.formatAmount(numericAmount);
     const hashedSecret = this.getHashedSecret();
 
     const rawString = merchantId + order_id + formattedAmount + currency + hashedSecret;
@@ -40,7 +50,25 @@ class PaymentService {
   }
 
   /**
+   * Helper to find an order by MongoDB ID or paymentResult reference
+   */
+  async findOrderByReference(order_id) {
+    let order = null;
+    try {
+      order = await Order.findById(order_id);
+    } catch {
+      // order_id is not a valid ObjectId, search by custom payment reference
+      order = await Order.findOne({ 'paymentResult.id': order_id });
+    }
+    if (!order) {
+      order = await Order.findOne({ 'paymentResult.id': order_id });
+    }
+    return order;
+  }
+
+  /**
    * Verify and process PayHere Payment Webhook Callback
+   * Triggers corresponding customer email notifications for Success, Failure, Cancellation, etc.
    */
   async processPaymentNotification(notifyData) {
     const {
@@ -51,8 +79,7 @@ class PaymentService {
       payhere_currency,
       status_code,
       md5sig,
-      custom_1,
-      custom_2,
+      status_message,
     } = notifyData;
 
     const formattedPayhereAmount = this.formatAmount(payhere_amount);
@@ -78,16 +105,11 @@ class PaymentService {
       throw error;
     }
 
-    // Status code 2 indicates successful payment confirmation by PayHere
-    if (String(status_code) === '2') {
-      let order;
-      // Find order by MongoDB ObjectId or custom order_id
-      try {
-        order = await Order.findById(order_id);
-      } catch (e) {
-        order = await Order.findOne({ 'paymentResult.id': order_id });
-      }
+    const order = await this.findOrderByReference(order_id);
+    const statusCodeStr = String(status_code);
 
+    // Status code 2: Payment Successfully Completed
+    if (statusCodeStr === '2') {
       if (order) {
         order.isPaid = true;
         order.paidAt = Date.now();
@@ -98,9 +120,120 @@ class PaymentService {
           payhere_payment_id: payment_id || '',
         };
         await order.save();
-        return { status: 'SUCCESS', message: 'Order payment status updated successfully', orderId: order._id };
+
+        // Populate user details for email dispatch
+        await order.populate('user', 'name email');
+
+        try {
+          await notificationService.sendPaymentSuccessNotification({
+            order,
+            paymentResult: order.paymentResult,
+            paymentAmount: formattedPayhereAmount,
+            currency: payhere_currency || 'LKR',
+          });
+        } catch (notifErr) {
+          console.error(`[NOTIFICATION ERROR] Failed to send payment success notification for order ${order._id}:`, notifErr.message);
+        }
+
+        return { status: 'SUCCESS', message: 'Order payment status updated successfully and confirmation notification dispatched', orderId: order._id };
       } else {
         return { status: 'WARNING', message: 'Payment verified but order not found in database', orderId: order_id };
+      }
+    }
+
+    // Status code -2: Payment Failed
+    if (statusCodeStr === '-2') {
+      if (order) {
+        order.paymentResult = {
+          id: order_id,
+          status: 'FAILED',
+          update_time: new Date().toISOString(),
+          payhere_payment_id: payment_id || '',
+          status_message: status_message || 'Payment declined or transaction failed',
+        };
+        await order.save();
+        await order.populate('user', 'name email');
+
+        try {
+          await notificationService.sendPaymentFailedNotification({
+            order,
+            reason: status_message || 'Transaction declined by bank or card issuer',
+            statusCode: status_code,
+          });
+        } catch (notifErr) {
+          console.error(`[NOTIFICATION ERROR] Failed to send payment failure notification for order ${order._id}:`, notifErr.message);
+        }
+
+        return { status: 'FAILED', message: 'Order payment failed and failure notification dispatched', orderId: order._id };
+      }
+    }
+
+    // Status code -1: Payment Canceled
+    if (statusCodeStr === '-1') {
+      if (order) {
+        order.paymentResult = {
+          id: order_id,
+          status: 'CANCELED',
+          update_time: new Date().toISOString(),
+          payhere_payment_id: payment_id || '',
+        };
+        await order.save();
+        await order.populate('user', 'name email');
+
+        try {
+          await notificationService.sendPaymentCanceledNotification({
+            order,
+            reason: status_message || 'Payment session canceled by user',
+          });
+        } catch (notifErr) {
+          console.error(`[NOTIFICATION ERROR] Failed to send payment canceled notification for order ${order._id}:`, notifErr.message);
+        }
+
+        return { status: 'CANCELED', message: 'Order payment was canceled and cancellation notification dispatched', orderId: order._id };
+      }
+    }
+
+    // Status code -3: Chargeback
+    if (statusCodeStr === '-3') {
+      if (order) {
+        order.paymentResult = {
+          id: order_id,
+          status: 'CHARGEDBACK',
+          update_time: new Date().toISOString(),
+          payhere_payment_id: payment_id || '',
+        };
+        await order.save();
+        await order.populate('user', 'name email');
+
+        try {
+          await notificationService.sendPaymentChargebackNotification({ order });
+        } catch (notifErr) {
+          console.error(`[NOTIFICATION ERROR] Failed to send chargeback alert for order ${order._id}:`, notifErr.message);
+        }
+
+        return { status: 'CHARGEDBACK', message: 'Chargeback received and alert dispatched', orderId: order._id };
+      }
+    }
+
+    // Status code 0: Pending
+    if (statusCodeStr === '0') {
+      if (order) {
+        order.paymentResult = {
+          id: order_id,
+          status: 'PENDING',
+          update_time: new Date().toISOString(),
+          payhere_payment_id: payment_id || '',
+        };
+        await order.save();
+        await order.populate('user', 'name email');
+
+        try {
+          await notificationService.sendPaymentPendingNotification({ order });
+        } catch (notifErr) {
+          console.error(`[NOTIFICATION ERROR] Failed to send payment pending notification for order ${order._id}:`, notifErr.message);
+        }
+
+        return { status: 'PENDING', message: 'Payment pending confirmation and notification dispatched', orderId: order._id };
       }
     }
 
@@ -110,6 +243,87 @@ class PaymentService {
       orderId: order_id,
     };
   }
+
+  /**
+   * Confirm payment completion from client-side PayHere onCompleted callback or direct verification
+   * Idempotent: If order is already marked paid, returns success without double-processing or duplicate emails.
+   */
+  async confirmPaymentCompletion(data = {}, requestingUser = null) {
+    const rawOrderId = data.orderId || data.order_id;
+    if (!rawOrderId) {
+      const error = new Error('orderId is required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const order = await this.findOrderByReference(rawOrderId);
+    if (!order) {
+      const error = new Error('Order not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (requestingUser) {
+      const isOwner = order.user && order.user.toString() === requestingUser._id.toString();
+      const isAdmin = requestingUser.role === 'admin' || requestingUser.isAdmin === true || requestingUser.isSuperAdmin === true;
+      if (!isOwner && !isAdmin) {
+        const error = new Error('Not authorized to confirm payment for this order');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    // Idempotent: If order is already paid, return early
+    if (order.isPaid) {
+      return {
+        status: 'ALREADY_PAID',
+        message: 'Order is already marked as paid',
+        order,
+      };
+    }
+
+    const paymentId = data.paymentId || data.payment_id || `PAYHERE-${Date.now()}`;
+    const statusMsg = data.status_message || data.status || 'Payment completed via PayHere';
+
+    order.isPaid = true;
+    order.paidAt = Date.now();
+    order.paymentResult = {
+      id: rawOrderId,
+      status: 'COMPLETED',
+      update_time: new Date().toISOString(),
+      payhere_payment_id: paymentId,
+      status_message: statusMsg,
+    };
+
+    await order.save();
+    await order.populate('user', 'name email');
+
+    // Dispatch Payment Success Notification
+    try {
+      await notificationService.sendPaymentSuccessNotification({
+        order,
+        paymentResult: order.paymentResult,
+        paymentAmount: this.formatAmount(order.totalPrice),
+        currency: payhereConfig.currency || 'LKR',
+      });
+    } catch (notifErr) {
+      console.error(`[NOTIFICATION ERROR] Failed to send payment confirmation for order ${order._id}:`, notifErr.message);
+    }
+
+    // Dispatch Order Created Notification for PayHere orders
+    try {
+      await notificationService.sendOrderCreatedNotification(order);
+    } catch (notifErr) {
+      console.warn(`[NOTIFICATION WARN] Failed to send order creation notification for order ${order._id}:`, notifErr.message);
+    }
+
+    return {
+      status: 'SUCCESS',
+      message: 'Payment confirmed successfully and order updated to paid',
+      order,
+    };
+  }
 }
 
 module.exports = new PaymentService();
+
