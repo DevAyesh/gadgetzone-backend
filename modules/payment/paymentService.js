@@ -25,6 +25,9 @@ class PaymentService {
    */
   generatePayHereHash({ order_id, amount, isMinorUnits = false, currency = payhereConfig.currency }) {
     const merchantId = payhereConfig.merchantId;
+    if (merchantId === '123456' || payhereConfig.merchantSecret === 'secret123') {
+      console.warn('[PAYHERE WARNING] Using fallback dummy merchant credentials (123456 / secret123). Please set PAYHERE_MERCHANT_ID and PAYHERE_MERCHANT_SECRET in Render environment variables.');
+    }
     let numericAmount = Number(amount);
     if (isNaN(numericAmount) || numericAmount < 0) {
       numericAmount = 0;
