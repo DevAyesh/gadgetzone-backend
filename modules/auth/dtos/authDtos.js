@@ -44,6 +44,105 @@ const validateGoogleAuthInput = (data) => {
   };
 };
 
+const validateVerifyRegisterOtpInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  const otpVal = data.otp || data.code;
+  if (!otpVal || typeof otpVal !== 'string' || !otpVal.trim()) {
+    errors.push('OTP is required');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateSendLoginOtpInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateVerifyLoginOtpInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  const otpVal = data.otp || data.code;
+  if (!otpVal || typeof otpVal !== 'string' || !otpVal.trim()) {
+    errors.push('OTP is required');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateForgotPasswordInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateVerifyResetOtpInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  const otpVal = data.otp || data.code;
+  if (!otpVal || typeof otpVal !== 'string' || !otpVal.trim()) {
+    errors.push('OTP is required');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateResetPasswordInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  const otpVal = data.otp || data.code;
+  if (!otpVal || typeof otpVal !== 'string' || !otpVal.trim()) {
+    errors.push('OTP is required');
+  }
+  if (!data.newPassword || typeof data.newPassword !== 'string' || data.newPassword.length < 6) {
+    errors.push('New password must be at least 6 characters long');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateResendOtpInput = (data = {}) => {
+  const errors = [];
+  if (!data.email || typeof data.email !== 'string' || !data.email.includes('@')) {
+    errors.push('Valid email is required');
+  }
+  if (data.purpose !== undefined && !['REGISTER', 'LOGIN', 'PASSWORD_RESET'].includes(data.purpose)) {
+    errors.push('Valid purpose is required (REGISTER, LOGIN, or PASSWORD_RESET)');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
 const toAuthResponseDTO = (user, token) => {
   return user.toAuthDTO(token);
 };
@@ -52,5 +151,13 @@ module.exports = {
   validateRegisterInput,
   validateLoginInput,
   validateGoogleAuthInput,
+  validateVerifyRegisterOtpInput,
+  validateSendLoginOtpInput,
+  validateVerifyLoginOtpInput,
+  validateForgotPasswordInput,
+  validateVerifyResetOtpInput,
+  validateResetPasswordInput,
+  validateResendOtpInput,
   toAuthResponseDTO,
 };
+

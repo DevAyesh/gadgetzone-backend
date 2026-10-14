@@ -135,9 +135,8 @@ class UserController {
         return errorResponse(res, 400, 'Validation Failed', validation.errors);
       }
 
-      const adminUserId = req.user._id;
       const targetUserId = req.params.id;
-      const updatedUser = await userService.updateUserStatus(adminUserId, targetUserId, req.body.isActive);
+      const updatedUser = await userService.updateUserStatus(req.user, targetUserId, req.body.isActive);
       const profileData = toUserProfileDTO(updatedUser);
 
       console.log(`[ADMIN SUCCESS] ADMIN '${req.user.email.toUpperCase()}' UPDATED ACCOUNT '${updatedUser.email.toUpperCase()}' (ROLE: ${updatedUser.role.toUpperCase()}, USER ID: ${updatedUser.userId || updatedUser._id}) ACTIVE STATUS TO: ${updatedUser.isActive ? 'ACTIVE' : 'INACTIVE'}`);
@@ -164,7 +163,17 @@ class UserController {
         return errorResponse(res, 400, 'Validation Failed', validation.errors);
       }
 
-      const newAdmin = await userService.createAdminUser(req.body);
+      const isSuperAdminRequested = Boolean(req.body.isSuperAdmin);
+      if (isSuperAdminRequested && !req.user.isSuperAdmin) {
+        return errorResponse(res, 403, 'Forbidden: Only Super Admins can create Super Admin accounts');
+      }
+
+      const newAdmin = await userService.createAdminUser({
+        name: req.body.name,
+        email: req.body.email,
+        password: req.body.password,
+        isSuperAdmin: isSuperAdminRequested,
+      });
       const profileData = toUserProfileDTO(newAdmin);
 
       console.log(`[ADMIN SUCCESS] ADMIN '${req.user.email.toUpperCase()}' CREATED NEW ADMIN ACCOUNT: ${newAdmin.email.toUpperCase()} (USER ID: ${newAdmin.userId || newAdmin._id})`);
@@ -185,13 +194,13 @@ class UserController {
    */
   async updateUserRole(req, res, next) {
     try {
-      const { role } = req.body;
+      const { role, isSuperAdmin } = req.body;
       if (!role || !['customer', 'admin'].includes(role)) {
         return errorResponse(res, 400, 'Invalid role. Must be customer or admin.');
       }
 
       const targetUserId = req.params.id;
-      const updatedUser = await userService.updateUserRole(targetUserId, role);
+      const updatedUser = await userService.updateUserRole(targetUserId, role, isSuperAdmin, req.user);
       const profileData = toUserProfileDTO(updatedUser);
 
       console.log(`[ADMIN SUCCESS] ADMIN '${req.user.email.toUpperCase()}' UPDATED USER '${updatedUser.email.toUpperCase()}' (USER ID: ${updatedUser.userId || updatedUser._id}) ROLE TO: ${updatedUser.role.toUpperCase()}`);
@@ -212,9 +221,8 @@ class UserController {
    */
   async deleteUserByAdmin(req, res, next) {
     try {
-      const adminUserId = req.user._id;
       const targetUserId = req.params.id;
-      const deletedUser = await userService.softDeleteUserByAdmin(adminUserId, targetUserId);
+      const deletedUser = await userService.softDeleteUserByAdmin(req.user, targetUserId);
 
       console.log(`[ADMIN SUCCESS] ADMIN '${req.user.email.toUpperCase()}' SOFT-DELETED USER ACCOUNT '${deletedUser.email.toUpperCase()}' (USER ID: ${deletedUser.userId || deletedUser._id})`);
       return successResponse(res, 200, 'User account deleted successfully by admin');
@@ -235,10 +243,10 @@ class UserController {
   async restoreUserByAdmin(req, res, next) {
     try {
       const targetUserId = req.params.id;
-      const restoredUser = await userService.restoreUserByAdmin(targetUserId);
+      const restoredUser = await userService.restoreUserByAdmin(req.user, targetUserId);
       const profileData = toUserProfileDTO(restoredUser);
 
-      console.log(`[ADMIN SUCCESS] ADMIN '${req.user.email.toUpperCase()}' RESTORED SOFT-DELETED USER ACCOUNT '${restoredUser.email.toUpperCase()}' (USER ID: ${restoredUser.userId || restoredUser._id})`);
+      console.log(`[ADMIN SUCCESS] ADMIN '${(req.user?.email || 'ADMIN').toUpperCase()}' RESTORED SOFT-DELETED USER ACCOUNT '${restoredUser.email.toUpperCase()}' (USER ID: ${restoredUser.userId || restoredUser._id})`);
       return successResponse(res, 200, 'User account restored successfully', profileData);
     } catch (error) {
       if (error.statusCode) {

@@ -50,11 +50,28 @@ const verifyToken = async (req, res, next) => {
  * Middleware guard to check if user has admin privileges
  */
 const isAdmin = (req, res, next) => {
-  if (req.user && (req.user.role === 'admin' || req.user.isAdmin === true)) {
+  if (req.user && (req.user.role === 'admin' || req.user.isAdmin === true || req.user.isSuperAdmin === true)) {
     return next();
   }
-  console.warn(`[SECURITY ALERT] NON-ADMIN USER (ID: ${req.user?._id}, EMAIL: ${req.user?.email?.toUpperCase()}) ATTEMPTED FORBIDDEN ACCESS TO ${req.method.toUpperCase()} ${req.originalUrl.toUpperCase()} FROM IP ${req.ip}`);
+  const method = (req.method || 'GET').toUpperCase();
+  const url = (req.originalUrl || req.url || '').toUpperCase();
+  const email = (req.user && req.user.email ? req.user.email : 'ANONYMOUS').toUpperCase();
+  console.warn(`[SECURITY ALERT] NON-ADMIN USER (ID: ${req.user?._id}, EMAIL: ${email}) ATTEMPTED FORBIDDEN ACCESS TO ${method} ${url} FROM IP ${req.ip}`);
   return errorResponse(res, 403, 'Forbidden: Admin access required');
+};
+
+/**
+ * Middleware guard to check if user has super admin privileges
+ */
+const isSuperAdmin = (req, res, next) => {
+  if (req.user && req.user.isSuperAdmin === true) {
+    return next();
+  }
+  const method = (req.method || 'GET').toUpperCase();
+  const url = (req.originalUrl || req.url || '').toUpperCase();
+  const email = (req.user && req.user.email ? req.user.email : 'ANONYMOUS').toUpperCase();
+  console.warn(`[SECURITY ALERT] NON-SUPER-ADMIN USER (ID: ${req.user?._id}, EMAIL: ${email}) ATTEMPTED FORBIDDEN ACCESS TO SUPER ADMIN ACTION: ${method} ${url} FROM IP ${req.ip}`);
+  return errorResponse(res, 403, 'Forbidden: Super Admin access required');
 };
 
 module.exports = {
@@ -62,4 +79,6 @@ module.exports = {
   protect: verifyToken,
   isAdmin,
   admin: isAdmin,
+  isSuperAdmin,
+  superAdmin: isSuperAdmin,
 };

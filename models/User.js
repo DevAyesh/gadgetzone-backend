@@ -38,6 +38,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isSuperAdmin: {
+      type: Boolean,
+      default: false,
+    },
     googleId: {
       type: String,
       default: null,
@@ -99,13 +103,17 @@ userSchema.pre('save', async function () {
     this.userId = counter.seq;
   }
 
-  if (this.role === 'admin') {
+  if (this.isSuperAdmin) {
+    this.role = 'admin';
+    this.isAdmin = true;
+  } else if (this.role === 'admin') {
     this.isAdmin = true;
   } else if (this.isAdmin) {
     this.role = 'admin';
   } else {
     this.role = 'customer';
     this.isAdmin = false;
+    this.isSuperAdmin = false;
   }
 
   if (!this.isModified('password') || !this.password) {
@@ -131,6 +139,7 @@ userSchema.methods.toAuthDTO = function (token = null) {
     email: this.email,
     role: this.role,
     isAdmin: this.isAdmin,
+    isSuperAdmin: Boolean(this.isSuperAdmin),
     avatar: this.avatar,
     phoneNumber: this.phoneNumber,
     address_line1: this.address_line1,

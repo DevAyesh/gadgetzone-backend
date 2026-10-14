@@ -1,12 +1,12 @@
 const { errorResponse } = require('../common/dtos/responseDto');
 
-const notFound = (req, res, next) => {
+const notFound = (req, res, _next) => {
   console.warn(`[HTTP 404] ROUTE NOT FOUND: ${req.method.toUpperCase()} ${req.originalUrl.toUpperCase()} FROM IP: ${req.ip}`);
   return errorResponse(res, 404, `Route Not Found - ${req.originalUrl}`);
 };
 
-const errorHandler = (err, req, res, next) => {
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+const errorHandler = (err, req, res, _next) => {
+  let statusCode = err.statusCode || (res.statusCode === 200 ? 500 : res.statusCode);
   let message = err.message || 'Internal Server Error';
 
   // Log unhandled application or database exceptions in UPPERCASE

@@ -37,8 +37,22 @@ const toPayHereHashResponseDTO = ({ merchant_id, order_id, amount, currency, has
   };
 };
 
+const validateConfirmPaymentInput = (data = {}) => {
+  const errors = [];
+  const orderId = data.orderId || data.order_id;
+  if (!orderId) {
+    errors.push('orderId or order_id is required');
+  }
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
 module.exports = {
   validatePayHereHashRequest,
   validatePayHereNotifyInput,
+  validateConfirmPaymentInput,
   toPayHereHashResponseDTO,
 };
+

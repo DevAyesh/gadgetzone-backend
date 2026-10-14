@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('./userController');
+const authRoutes = require('../auth/authRoutes');
 const { verifyToken, isAdmin } = require('../../middleware/authMiddleware');
+
+// Mount Auth routes for compatibility (/api/users/register, /api/users/login, /api/users/verify-email, etc.)
+router.use('/', authRoutes);
 
 // User Self-Service Profile Routes (Private)
 router.get('/profile', verifyToken, (req, res, next) => userController.getProfile(req, res, next));

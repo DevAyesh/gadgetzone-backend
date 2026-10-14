@@ -14,18 +14,32 @@ class OrderController {
    */
   async createOrder(req, res, next) {
     try {
-      const validation = validateCreateOrderInput(req.body);
+      const body = req.body || {};
+      const validation = validateCreateOrderInput(body);
       if (!validation.isValid) {
-        console.warn(`[ORDER WARN] CHECKOUT VALIDATION FAILED FOR USER ID ${req.user._id}: ${validation.errors.join(', ').toUpperCase()}`);
+        console.warn(`[ORDER WARN] CHECKOUT VALIDATION FAILED: ${validation.errors.join(', ').toUpperCase()}`);
         return errorResponse(res, 400, 'Validation Failed', validation.errors);
       }
 
-      const order = await orderService.createOrder(req.user._id, req.body);
-      console.log(`[ORDER SUCCESS] USER '${req.user.email.toUpperCase()}' CREATED ORDER (ID: ${order._id}, TOTAL: ${order.totalPrice})`);
-      return successResponse(res, 201, 'Order created successfully', toOrderDTO(order));
+      const userId = req.user ? req.user._id : null;
+      if (!userId) {
+        return errorResponse(res, 401, 'User account or authentication is required to place an order');
+      }
+
+      const order = await orderService.createOrder(userId, body);
+      const dto = toOrderDTO(order);
+      const userEmail = req.user.email || (order.shippingAddress && order.shippingAddress.email) || 'customer';
+
+      console.log(`[ORDER SUCCESS] ORDER CREATED (ID: ${order._id}, TOTAL: ${order.totalPrice}, USER: ${userEmail.toUpperCase()})`);
+      return res.status(201).json({
+        success: true,
+        message: 'Order created successfully',
+        data: dto,
+        ...dto,
+      });
     } catch (error) {
       if (error.statusCode) {
-        console.warn(`[ORDER WARN] CHECKOUT FAILED FOR USER ID ${req.user._id}: ${error.message.toUpperCase()}`);
+        console.warn(`[ORDER WARN] CHECKOUT FAILED: ${error.message.toUpperCase()}`);
         return errorResponse(res, error.statusCode, error.message);
       }
       next(error);
@@ -131,6 +145,42 @@ class OrderController {
       next(error);
     }
   }
+
+  /**
+   * @route   PUT /api/orders/:id/ship
+   * @desc    Mark an order as shipped
+   * @access  Private/Admin
+   */
+  async markOrderAsShipped(req, res, next) {
+    try {
+      const order = await orderService.updateOrderToShipped(req.params.id, req.body || {});
+      console.log(`[ADMIN SUCCESS] ADMIN '${req.user.email.toUpperCase()}' MARKED ORDER ${order._id} AS SHIPPED`);
+      return successResponse(res, 200, 'Order marked as shipped', toOrderDTO(order));
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * @route   PUT /api/orders/:id/cancel
+   * @desc    Cancel an order
+   * @access  Private
+   */
+  async cancelOrder(req, res, next) {
+    try {
+      const order = await orderService.cancelOrder(req.params.id, req.body || {}, req.user);
+      console.log(`[ORDER CANCELLED] ORDER ${order._id} WAS CANCELLED BY USER '${req.user.email.toUpperCase()}'`);
+      return successResponse(res, 200, 'Order cancelled successfully', toOrderDTO(order));
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
   /**
     * @route   GET /api/orders/admin/sales/daily
     * @desc    Daily revenue aggregation (paid orders only)
@@ -194,6 +244,26 @@ class OrderController {
     try {
       const data = await orderService.getDashboardMetrics();
       return successResponse(res, 200, 'Dashboard metrics fetched successfully', data);
+    } catch (error) {
+      if (error.statusCode) {
+        return errorResponse(res, error.statusCode, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * @route   POST /api/orders/:id/payment-failed
+   * @desc    Mark order payment as failed/uncompleted (e.g., user dismissed or gateway error) and dispatch payment failed email
+   * @access  Private / Guest with order token
+   */
+  async markPaymentFailed(req, res, next) {
+    try {
+      const orderId = req.params.id;
+      const { reason, statusCode } = req.body || {};
+      const order = await orderService.markOrderPaymentFailed(orderId, { reason, statusCode }, req.user);
+      console.log(`[ORDER PAYMENT FAILED] ORDER ${orderId} MARKED AS PAYMENT FAILED (REASON: ${reason || 'N/A'})`);
+      return successResponse(res, 200, 'Order payment marked as failed and notification dispatched', toOrderDTO(order));
     } catch (error) {
       if (error.statusCode) {
         return errorResponse(res, error.statusCode, error.message);

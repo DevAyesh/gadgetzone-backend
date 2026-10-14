@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed:admin": "node scripts/seedAdmin.js",
-    "test": "node scripts/check-syntax.js && npm run lint",
+    "test": "node scripts/check-syntax.js && node scripts/run-notification-tests.js && npm run lint",
+    "test:notifications": "node scripts/run-notification-tests.js",
     "lint": "eslint ."
   },
   "keywords": [],
@@ -15,6 +16,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.112.3",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

@@ -35,11 +35,29 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    slug: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      index: true,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+productSchema.pre('save', function (next) {
+  if (this.name && (!this.slug || this.isModified('name'))) {
+    this.slug = this.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+  if (typeof next === 'function') {
+    next();
+  }
+});
 
 const Product = mongoose.model('Product', productSchema);
 

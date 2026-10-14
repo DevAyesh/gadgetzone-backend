@@ -47,6 +47,7 @@ const toUserProfileDTO = (user) => {
     email: user.email,
     role: user.role || (user.isAdmin ? 'admin' : 'customer'),
     isAdmin: user.isAdmin || user.role === 'admin',
+    isSuperAdmin: Boolean(user.isSuperAdmin),
     avatar: user.avatar || '',
     phoneNumber: user.phoneNumber || '',
     address_line1: user.address_line1 || '',

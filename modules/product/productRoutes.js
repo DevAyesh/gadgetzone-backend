@@ -6,6 +6,7 @@ const { uploadProductImages } = require('../../middleware/uploadMiddleware');
 
 // Public read-only endpoints
 router.get('/', (req, res, next) => productController.getProducts(req, res, next));
+router.get('/slug/:slug', (req, res, next) => productController.getProductBySlug(req, res, next));
 router.get('/:id', (req, res, next) => productController.getProductById(req, res, next));
 
 // Admin CRUD endpoints (protected)

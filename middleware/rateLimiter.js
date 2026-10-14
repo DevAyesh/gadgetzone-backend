@@ -18,4 +18,22 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { loginLimiter };
+/**
+ * Rate Limiter for OTP Generation & Resend Endpoints
+ * Limits each IP to 10 OTP requests per 15-minute window
+ */
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 OTP requests per 15 minutes
+  handler: (req, res) => {
+    console.warn(`[SECURITY ALERT] OTP RATE LIMIT EXCEEDED FOR IP: ${req.ip} ON ROUTE: ${req.originalUrl.toUpperCase()}`);
+    return res.status(429).json({
+      success: false,
+      message: 'Too many verification code requests from this IP. Please try again after 15 minutes.',
+    });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+module.exports = { loginLimiter, otpLimiter };
