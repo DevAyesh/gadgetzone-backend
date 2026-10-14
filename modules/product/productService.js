@@ -475,7 +475,13 @@ class ProductService {
    * [ADMIN] Soft delete a product
    */
   async deleteProduct(productId) {
-    const product = await Product.findById(productId);
+    let product = null;
+    if (productId && /^[0-9a-fA-F]{24}$/.test(String(productId))) {
+      product = await Product.findById(productId);
+    }
+    if (!product) {
+      product = await Product.findOne({ id: String(productId) });
+    }
     if (!product || product.isRemoved) {
       const error = new Error('Product not found or already deleted');
       error.statusCode = 404;
